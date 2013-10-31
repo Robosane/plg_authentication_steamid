@@ -10,15 +10,18 @@
 
 defined('_JEXEC') or die;
 
-// OpenID library include path
-$path = ini_get('include_path');
-$path_extra = JPATH_LIBRARIES.'/openid/';
-$path = $path_extra . PATH_SEPARATOR . $path;
-ini_set('include_path', $path);
-
 // OpenID library classes
-require_once JPATH_LIBRARIES.'/openid/Auth/OpenID/Consumer.php';
-require_once JPATH_LIBRARIES.'/openid/Auth/OpenID/FileStore.php';
+if (file_exists(JPATH_LIBRARIES.'/openid')) {
+    // OpenID library include path
+    $path = ini_get('include_path');
+    $path_extra = JPATH_LIBRARIES.'/openid';
+    $path = $path_extra . PATH_SEPARATOR . $path;
+    ini_set('include_path', $path);
+
+    // Required classes for the plugin
+    include_once JPATH_LIBRARIES.'/openid/Auth/OpenID/Consumer.php';
+    include_once JPATH_LIBRARIES.'/openid/Auth/OpenID/FileStore.php';
+}
 
 class PlgAuthenticationSteamID extends JPlugin
 {
@@ -38,6 +41,9 @@ class PlgAuthenticationSteamID extends JPlugin
      */
     public function onUserAuthenticate($credentials, $options, &$response)
     {
+        // Check for library existance first
+        if (!class_exists('Auth_OpenID_Consumer'))
+            return; // Bail
         $response->type = 'SteamID';
 
         $identifier = 'http://steamcommunity.com/openid';
