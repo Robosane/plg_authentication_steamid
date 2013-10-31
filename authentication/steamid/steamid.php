@@ -65,7 +65,7 @@ class PlgAuthenticationSteamID extends JPlugin
             $query  = $db->getQuery(true)
                 ->select('id, password')
                 ->from('#__users')
-                ->where('username=' . $db->quote($credentials['username']));
+                ->where('username=' . $db->quote($steamid));
 
             $db->setQuery($query);
             $result = $db->loadObject();
@@ -79,7 +79,7 @@ class PlgAuthenticationSteamID extends JPlugin
                 // Use steamid as new username
                 $response->username = $steamid;
 
-                // TODO Get full name from Steam API
+                // Get names from Steam API
                 $player_summaries = json_decode(file_get_contents('http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=E6C7134FF86C803B2A04D974976AE561&steamids='.$steamid), true);
                 $player_summary = $player_summaries['response']['players'][0];
 
