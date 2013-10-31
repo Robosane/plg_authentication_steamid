@@ -54,26 +54,44 @@ class PlgAuthenticationSteamID extends JPlugin
             preg_match('/(\d+)\D*$/', $openid, $matches);
             $steamid = $matches[1];
 
-            // Use steamid as new username
-            $response->username = $steamid;
+            // Check for user existance in database
+            $db     = JFactory::getDbo();
+            $query  = $db->getQuery(true)
+                ->select('id, password')
+                ->from('#__users')
+                ->where('username=' . $db->quote($credentials['username']));
 
-            // TODO Get full name from Steam API
-            $player_summaries = json_decode(file_get_contents('http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=E6C7134FF86C803B2A04D974976AE561&steamids='.$steamid), true);
-            $player_summary = $player_summaries['response']['players'][0];
+            $db->setQuery($query);
+            $result = $db->loadObject();
 
-            if ($player_summary['realname'])
-                $response->fullname = $player_summary['realname'];
-            elseif ($player_summary['personaname'])
-                $response->fullname = $player_summary['personaname'];
-            else
-                $response->fullname = $steamid;
+            if ($result) {
+                $user = JUser::getInstance($result->id);
+                $response->username = $user->username;
+                $response->email    = $user->email;
+                $response->fullname = $user->name;
+            } else {
+                // Use steamid as new username
+                $response->username = $steamid;
 
-            // Generate random password
-            $response->password = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 10);
-            $response->password_clear = $response->password;
+                // TODO Get full name from Steam API
+                $player_summaries = json_decode(file_get_contents('http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=E6C7134FF86C803B2A04D974976AE561&steamids='.$steamid), true);
+                $player_summary = $player_summaries['response']['players'][0];
 
-            // Generate email
-            $response->email = $steamid . '@steampowered.com';
+                if ($player_summary['realname'])
+                    $response->fullname = $player_summary['realname'];
+                elseif ($player_summary['personaname'])
+                    $response->fullname = $player_summary['personaname'];
+                else
+                    $response->fullname = $steamid;
+
+                // Generate random password
+                // NOTE Don't know why Joomla doesn't use these when creating new user
+                $response->password = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 10);
+                $response->password_clear = $response->password;
+
+                // Generate email
+                $response->email = $steamid . '@steampowered.com';
+            }
 
             // Return success status
             $response->status = JAuthentication::STATUS_SUCCESS;
