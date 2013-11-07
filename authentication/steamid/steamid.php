@@ -19,8 +19,8 @@ if (file_exists(JPATH_LIBRARIES.'/openid')) {
     ini_set('include_path', $path);
 
     // Required classes for the plugin
-    include_once JPATH_LIBRARIES.'/openid/Auth/OpenID/Consumer.php';
-    include_once JPATH_LIBRARIES.'/openid/Auth/OpenID/FileStore.php';
+    require_once 'Auth/OpenID/Consumer.php';
+    require_once 'Auth/OpenID/JDatabaseStore.php';
 }
 
 class PlgAuthenticationSteamID extends JPlugin
@@ -47,12 +47,15 @@ class PlgAuthenticationSteamID extends JPlugin
         $response->type = 'SteamID';
 
         $identifier = 'http://steamcommunity.com/openid';
-        $store_path = '/tmp';
-        $store = new Auth_OpenID_FileStore($store_path);
+
+        $store = new Auth_OpenID_JDatabaseStore();
         $consumer = new Auth_OpenID_Consumer($store);
         $return_url = JRoute::_($this->_getReturnURL(), true, -1);
-        $op_response = $consumer->complete($return_url);
+        try {
+            $op_response = $consumer->complete($return_url);
+        } catch (Exception $e) {
 
+        }
         switch ($op_response->status) {
         case Auth_OpenID_SUCCESS:
             // Get the SteamID
