@@ -66,9 +66,10 @@ class PlgAuthenticationSteamID extends JPlugin
             // Check for user existance in database
             $db     = JFactory::getDbo();
             $query  = $db->getQuery(true)
-                ->select('id, password')
-                ->from('#__users')
-                ->where('username=' . $db->quote($steamid));
+                ->select('u.id')
+                ->from('#__users as u')
+                ->join('left', '#__steamid as s ON s.user_id = u.id')
+                ->where('steamid = ' . $db->quote($steamid));
 
             $db->setQuery($query);
             $result = $db->loadObject();
@@ -78,6 +79,9 @@ class PlgAuthenticationSteamID extends JPlugin
                 $response->username = $user->username;
                 $response->email    = $user->email;
                 $response->fullname = $user->name;
+
+                $session = &JFactory::getSession();
+                $session->set('user.steamid_connected', true);
             } else {
                 // Use steamid as new username
                 $response->username = $steamid;
@@ -85,13 +89,57 @@ class PlgAuthenticationSteamID extends JPlugin
                 // Get names from Steam API
                 $player_summaries = json_decode(file_get_contents('http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=E6C7134FF86C803B2A04D974976AE561&steamids='.$steamid), true);
                 $player_summary = $player_summaries['response']['players'][0];
+                $personaname = $player_summary['personaname'];
+                $realname = !empty($player_summary['realname']) ? $player_summary['realname'] : '';
+                $avatar = $player_summary['avatarfull'];
+                $profileurl = $player_summary['profileurl'];
 
-                if ($player_summary['realname'])
-                    $response->fullname = $player_summary['realname'];
-                elseif ($player_summary['personaname'])
-                    $response->fullname = $player_summary['personaname'];
+                // Check for steamid existence
+                $query = $db->getQuery(true)
+                    ->select('COUNT(*)')
+                    ->from('#__steamid')
+                    ->where('steamid = ' . $db->quote($steamid));
+                $db->setQuery($query);
+                $count = $db->loadResult();
+
+                if (!$count) {
+                    // Store credentials into Steam ID table
+                    $query = $db->getQuery(true)
+                        ->insert('#__steamid')
+                        ->columns(array('steamid', 'personaname', 'realname', 'avatar', 'profileurl'))
+                        ->values(implode(',', array(
+                            $db->quote($steamid),
+                            $db->quote($personaname),
+                            $db->quote($realname),
+                            $db->quote($avatar),
+                            $db->quote($profileurl)
+                        )));
+                    $db->setQuery($query);
+                    $db->query();
+                }
+
+                if ($realname)
+                    $response->fullname = $realname;
+                elseif ($personaname)
+                    $response->fullname = $personaname;
                 else
                     $response->fullname = $steamid;
+
+                // Set user name
+                if ($personaname) {
+                    setlocale(LC_CTYPE, 'vi_VN');
+                    $response->username = strtolower(iconv("UTF-8", "ASCII//TRANSLIT//IGNORE", $personaname));
+                    $response->username = preg_replace(array('/\s+/', '/\W/') , array('_', ''), $response->username);
+
+                    if (!$response->username) {
+                        $response->username = $steamid;
+                    } else {
+                        // Ensure unique username
+                        $response->username .= ("_" . substr($steamid, -3, 3));
+                    }
+                } else {
+                    $response->username = $steamid;
+                }
 
                 // Generate random password
                 // NOTE Don't know why Joomla doesn't use these when creating new user
@@ -100,6 +148,11 @@ class PlgAuthenticationSteamID extends JPlugin
 
                 // Generate email
                 $response->email = $steamid . '@steampowered.com';
+
+                // Set steamid on session
+                $session = &JFactory::getSession();
+                $session->set('user.steamid', $steamid);
+                $session->set('user.steamid_connected', false);
             }
 
             // Return success status
@@ -112,6 +165,34 @@ class PlgAuthenticationSteamID extends JPlugin
             $response->error_message = JText::_('PLG_AUTH_STEAMID_FAILURE');
             break;
         }
+    }
+
+    /**
+     * Connect SteamID to User entry
+     */
+    public function onUserAfterLogin($options)
+    {
+        $session = &JFactory::getSession();
+        if ($session->get('user.steamid_connected', true) == false) {
+            // Connect steamid to user
+            $user = $options['user'];
+            $db = JFactory::getDbo();
+            $query = $db->getQuery(true)
+                ->update('#__steamid')
+                ->set('user_id = ' . $user->id)
+                ->where('steamid = ' . $db->quote($session->get('user.steamid', 'not set steamid')));
+            $db->setQuery($query);
+            $db->query();
+
+            // Clear session
+            $session->clear('user.steamid');
+
+            // Indicate first time login
+            $session->set('user.first_connect', true);
+        }
+        $session->clear('user.steamid_connected');
+
+        return true;
     }
 
     private function _getReturnURL()
