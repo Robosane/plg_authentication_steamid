@@ -56,8 +56,9 @@ class PlgAuthenticationSteamID extends JPlugin
         } catch (Exception $e) {
 
         }
+
         switch ($op_response->status) {
-        case Auth_OpenID_SUCCESS:
+            case Auth_OpenID_SUCCESS:
             // Get the SteamID
             $openid = $op_response->getDisplayIdentifier();
             preg_match('/(\d+)\D*$/', $openid, $matches);
@@ -162,7 +163,7 @@ class PlgAuthenticationSteamID extends JPlugin
         case Auth_OpenID_CANCEL:
         default:
             $response->status = JAuthentication::STATUS_FAILURE;
-            $response->error_message = JText::_('PLG_AUTH_STEAMID_FAILURE');
+            $response->error_message = JText::sprintf('PLG_AUTH_STEAMID_FAILURE', $op_response->message);
             break;
         }
     }
