@@ -123,7 +123,7 @@ class PlgAuthenticationSteamID extends JPlugin
                 if ($personaname) {
                     setlocale(LC_CTYPE, 'vi_VN');
                     $response->username = strtolower(iconv("UTF-8", "ASCII//TRANSLIT//IGNORE", $personaname));
-                    $response->username = preg_replace(array('/\s+/', '/\W/') , array('_', ''), $response->username);
+                    $response->username = preg_replace(array('/\s+/', '/\W/', '/_+/') , array('_', '', '_'), $response->username);
 
                     if (!$response->username) {
                         $response->username = $steamid;
