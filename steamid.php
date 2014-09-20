@@ -84,9 +84,6 @@ class PlgAuthenticationSteamID extends JPlugin
                 $session = &JFactory::getSession();
                 $session->set('user.steamid_connected', true);
             } else {
-                // Use steamid as new username
-                $response->username = $steamid;
-
                 // Get names from Steam API
                 $player_summaries = json_decode(file_get_contents('http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=E6C7134FF86C803B2A04D974976AE561&steamids='.$steamid), true);
                 $player_summary = $player_summaries['response']['players'][0];
@@ -119,12 +116,8 @@ class PlgAuthenticationSteamID extends JPlugin
                     $db->query();
                 }
 
-                if ($realname)
-                    $response->fullname = $realname;
-                elseif ($personaname)
-                    $response->fullname = $personaname;
-                else
-                    $response->fullname = $steamid;
+                // Set fullname
+                $response->fullname = $personaname;
 
                 // Set user name
                 if ($personaname) {
