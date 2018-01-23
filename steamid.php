@@ -10,6 +10,48 @@
 
 defined('_JEXEC') or die;
 
+jimport('joomla.log.log');
+JLog::addLogger(
+    array(
+         // Sets file name
+         'text_file' => 'plg_steamid.log.php'
+    ),
+    // Sets messages of all log levels to be sent to the file
+    JLog::ALL,
+    // The log category/categories which should be recorded in this file
+    // In this case, it's just the one category from our extension, still
+    // we need to put it inside an array
+    array('plg_steamid')
+);
+//JLog::add(JText::_('JTEXT_ERROR_MESSAGE'), JLog::WARNING, 'plg_steamid');
+// XXX
+
+/**
+ * Generate a random string, using a cryptographically secure
+ * pseudorandom number generator (random_int)
+ *
+ * For PHP 7, random_int is a PHP core function
+ * For PHP 5.x, depends on https://github.com/paragonie/random_compat
+ *
+ * @param int $length      How many characters do we want?
+ * @param string $keyspace A string of all possible characters to select from
+ * @return string
+ */
+function random_str(
+    $length,
+    $keyspace = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+) {
+    $str = '';
+    $max = mb_strlen($keyspace, '8bit') - 1;
+    if ($max < 1) {
+        throw new Exception('$keyspace must be at least two characters long');
+    }
+    for ($i = 0; $i < $length; ++$i) {
+        $str .= $keyspace[random_int(0, $max)];
+    }
+    return $str;
+}
+
 // OpenID library classes
 if (file_exists(JPATH_LIBRARIES.'/openid')) {
     // OpenID library include path
@@ -27,6 +69,22 @@ class PlgAuthenticationSteamID extends JPlugin
 {
     protected $_type='authentication';
     protected $_name='steamid';
+
+    /**
+     * Return 1 if https url, 2 if http,
+     * -1 if neither.
+     * Used when creating callback URL with JRoute().
+     */
+    protected function usessl_int() {
+        $uri = JUri::getInstance();
+        if ($uri->getScheme() == 'https') {
+            return 1;
+        } else if ($uri-getScheme() == 'http') {
+            return 2;
+        } else {
+            return -1;
+        }
+    }
 
     /**
      * This method should handle any authentication and report back to the subject
@@ -50,7 +108,8 @@ class PlgAuthenticationSteamID extends JPlugin
 
         $store = new Auth_OpenID_JDatabaseStore();
         $consumer = new Auth_OpenID_Consumer($store);
-        $return_url = JRoute::_($this->_getReturnURL(), true, -1);
+        $return_url = JRoute::_($this->_getReturnURL(), true, $this->usessl_int() );
+        //JLog::add(JText::_('RETURN_URL CREATED: ' . $return_url ), JLog::DEBUG, 'plg_steamid'); // XXX
         try {
             $op_response = $consumer->complete($return_url);
         } catch (Exception $e) {
@@ -135,9 +194,11 @@ class PlgAuthenticationSteamID extends JPlugin
                     $response->username = $steamid;
                 }
 
+                JLog::add(JText::_('SteamID auth from user: ' . $response->username ), JLog::DEBUG, 'plg_steamid'); // XXX
+
                 // Generate random password
                 // NOTE Don't know why Joomla doesn't use these when creating new user
-                $response->password = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 10);
+                $response->password = random_str(24);
                 $response->password_clear = $response->password;
 
                 // Generate email
@@ -157,6 +218,9 @@ class PlgAuthenticationSteamID extends JPlugin
         default:
             $response->status = JAuthentication::STATUS_FAILURE;
             $response->error_message = JText::sprintf('PLG_AUTH_STEAMID_FAILURE', $op_response->message);
+            JLog::add(JText::_('AUTH_STEAMID_FAIL: ' . $op_response->message ), JLog::WARNING, 'plg_steamid');
+            JLog::add(JText::_('RESPONSE ERRMSG: ' . $op_response->error_message ), JLog::DEBUG, 'plg_steamid'); // XXX
+            JLog::add(JText::_('RESPONSE STATUS: ' . $op_response->status ), JLog::DEBUG, 'plg_steamid'); // XXX
             break;
         }
     }
